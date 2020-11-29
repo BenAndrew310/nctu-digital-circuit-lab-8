@@ -52,8 +52,8 @@ module lab8(
 
 localparam [2:0] S_MAIN_INIT = 3'b000, S_MAIN_IDLE = 3'b001,
                  S_MAIN_WAIT = 3'b010, S_MAIN_READ = 3'b011,
-                 S_MAIN_DONE = 3'b100, S_MAIN_SEARCH = 3'b101, 
-                 S_MAIN_SHOW = 3'b111;
+                 S_MAIN_SEARCH = 3'b100, S_MAIN_DONE = 3'b101,  
+                 S_MAIN_SHOW = 3'b110;
 
 // Declare system variables
 wire btn_level, btn_pressed;
@@ -91,7 +91,7 @@ wire [8:0] sram_addr;
 wire       sram_we, sram_en;
 
 assign clk_sel = (init_finished)? clk : clk_500k; // clock for the SD controller
-assign usr_led = 4'h00;
+assign usr_led = P;//4'h00;
 
 clk_divider#(200) clk_divider0(
   .clk(clk),
@@ -174,12 +174,12 @@ always @(posedge clk) begin
   end
   else begin
     P <= P_next;
-    if (P == S_MAIN_DONE)
+    if (P == S_MAIN_SHOW)
       done_flag <= 1;
-    else if (P == S_MAIN_SHOW && P_next == S_MAIN_IDLE)
-      done_flag <= 0;
+//    else if (P == S_MAIN_SHOW && P_next == S_MAIN_IDLE)
+//      done_flag <= 0;
     else
-      done_flag <= done_flag;
+      done_flag <= 0;
   end
 end
 
@@ -353,7 +353,7 @@ always @(posedge clk) begin
               ((tot_count[ 7: 4] > 9) ? "7" : "0") + tot_count[ 7: 4],
               ((tot_count[ 3: 0] > 9) ? "7" : "0") + tot_count[ 3: 0], " words"};
 
-    row_B <= "in the text file"
+    row_B <= "in the text file";
   end
   else if (P == S_MAIN_IDLE) begin
     row_A <= "Hit BTN2 to read";
