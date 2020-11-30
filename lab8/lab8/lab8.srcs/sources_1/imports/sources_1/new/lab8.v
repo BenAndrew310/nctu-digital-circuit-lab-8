@@ -61,8 +61,8 @@ reg  prev_btn_level;
 
 reg  result_ready;
 reg  dlab_tag, dlab_end;
-reg  [2:0] dlab_tag_counter, dlab_end_counter;
-reg  [4:0] tl_counter; // counter to count the letters in a word
+reg  [3:0] dlab_tag_counter, dlab_end_counter;
+reg  [5:0] tl_counter; // counter to count the letters in a word
 reg  [15:0] tot_count;  // counter for the number of 3-letter words
 
 reg  [5:0] send_counter;
@@ -91,7 +91,8 @@ wire [8:0] sram_addr;
 wire       sram_we, sram_en;
 
 assign clk_sel = (init_finished)? clk : clk_500k; // clock for the SD controller
-assign usr_led = P;//4'h00;
+//assign usr_led[2:0] = P;//4'h00;
+assign usr_led =dlab_tag; 
 
 clk_divider#(200) clk_divider0(
   .clk(clk),
@@ -172,15 +173,15 @@ always @(posedge clk) begin
     P <= S_MAIN_INIT;
     done_flag <= 0;
   end
-  else begin
+  else// begin
     P <= P_next;
-    if (P == S_MAIN_SHOW)
-      done_flag <= 1;
+//    if (P == S_MAIN_SHOW)
+//      done_flag <= 1;
 //    else if (P == S_MAIN_SHOW && P_next == S_MAIN_IDLE)
 //      done_flag <= 0;
-    else
-      done_flag <= 0;
-  end
+//    else
+//      done_flag <= 0;
+//  end
 end
 
 always @(*) begin // FSM next-state logic
@@ -194,12 +195,13 @@ always @(*) begin // FSM next-state logic
     S_MAIN_WAIT: // issue a rd_req to the SD controller until it's ready
       P_next = S_MAIN_READ;
     S_MAIN_READ: // wait for the input data to enter the SRAM buffer
-      if (sd_counter == 512) P_next = S_MAIN_SEARCH;
-      else P_next = S_MAIN_READ;
-    S_MAIN_SEARCH:
       if (result_ready) P_next = S_MAIN_SHOW;
-      else if (sd_counter == 512) P_next = S_MAIN_DONE;
-      else P_next = S_MAIN_SEARCH;
+      else if (sd_counter == 512) P_next = S_MAIN_DONE;//S_MAIN_SEARCH;
+      else P_next = S_MAIN_READ;
+//    S_MAIN_SEARCH:
+//      if (result_ready) P_next = S_MAIN_SHOW;
+//      else if (sd_counter == 512) P_next = S_MAIN_DONE;
+//      else P_next = S_MAIN_SEARCH;
     S_MAIN_DONE: // read byte 0 of the superblock from sram[]
       // if (btn_pressed == 1) P_next = S_MAIN_SHOW;
       // else P_next = S_MAIN_DONE;
@@ -229,11 +231,11 @@ end
 // SD card read address incrementer
 always @(posedge clk) begin
   if (~reset_n || 
-    (P == S_MAIN_READ && P_next == S_MAIN_SEARCH) || 
+//    (P == S_MAIN_READ && P_next == S_MAIN_SEARCH) || 
     (P == S_MAIN_DONE && P_next == S_MAIN_WAIT) )
     sd_counter <= 0;
-  else if ((P == S_MAIN_READ && sd_valid) ||
-            P == S_MAIN_SEARCH)
+  else if (P == S_MAIN_READ && sd_valid) //||
+           // P == S_MAIN_SEARCH)
            // (P == S_MAIN_DONE && P_next == S_MAIN_SHOW))
     sd_counter <= sd_counter + 1;
   else sd_counter <= sd_counter;
@@ -259,70 +261,81 @@ always @(posedge clk) begin
     dlab_end_counter <= 0;
     result_ready <= 0;
   end
-  if (P == S_MAIN_SEARCH && !dlab_tag) begin
-    case (data_out)
-      8'h44: // D
-      dlab_tag_counter <= 1;
-      8'h4C: // L
-      if (dlab_tag_counter == 1) dlab_tag_counter <= 2;
-      else dlab_tag_counter <= 0; 
-      8'h41: // A
-      if (dlab_tag_counter == 2) dlab_tag_counter <= 3;
-      else if (dlab_tag_counter == 6) dlab_tag_counter <= 7;
-      else dlab_tag_counter <= 0;
-      8'h42: // B
-      if (dlab_tag_counter == 3) dlab_tag_counter <= 4;
-      else dlab_tag_counter <= 0;
-      8'h5F: // _
-      if (dlab_tag_counter == 4) dlab_tag_counter <= 5;
-      else dlab_tag_counter <= 0;
-      8'h54: // T
-      if (dlab_tag_counter == 5) dlab_tag_counter <= 6;
-      else dlab_tag_counter <= 0;
-      8'h47: // G
-      if (dlab_tag_counter == 7) dlab_tag_counter <= 8;
-      else dlab_tag_counter <= 0;
-    endcase
-    if (dlab_tag_counter == 8) dlab_tag <= 1;
-  end
-  if (P == S_MAIN_SEARCH && dlab_tag && !result_ready) begin
-    if ((data_out>8'h40 && data_out<8'h5B) || (data_out>8'h60 && data_out<8'h7B)) begin
-      tl_counter <= tl_counter+1;
-    end else begin
-      if (tl_counter == 3) tot_count <= tot_count+1;
-      tl_counter <= 0;
-    end
-  end
-  if (P == S_MAIN_SEARCH && dlab_tag && !dlab_end) begin
-    case (data_out)
-      8'h44: // D
-      if (dlab_end_counter==0) dlab_end_counter <= 1;
-      else if (dlab_end_counter==7) dlab_end_counter <= 8;
-      else dlab_end_counter <= 0;
-      8'h4C: // L
-      if (dlab_end_counter == 1) dlab_end_counter <= 2;
-      else dlab_tag_counter <= 0; 
-      8'h41: // A
-      if (dlab_end_counter == 2) dlab_end_counter <= 3;
-      else dlab_end_counter <= 0;
-      8'h42: // B
-      if (dlab_end_counter == 3) dlab_end_counter <= 4;
-      else dlab_end_counter <= 0;
-      8'h5F: // _
-      if (dlab_end_counter == 4) dlab_end_counter <= 5;
-      else dlab_end_counter <= 0;
-      8'h45: // E
-      if (dlab_end_counter == 5) dlab_end_counter <= 6;
-      else dlab_end_counter <= 0;
-      8'h4E: // N
-      if (dlab_end_counter == 6) dlab_end_counter <= 7;
-      else dlab_end_counter <= 0;
-    endcase
-    if (dlab_end_counter == 8) begin
-      dlab_end <= 1;
-      tot_count <= tot_count-2;
-      result_ready <= 1;
-    end
+  else begin
+      if (P == S_MAIN_READ && !dlab_tag && sd_valid) begin
+        if (dlab_tag_counter == 8) dlab_tag <= 1;
+        else begin
+            case (sd_dout) //(data_out)
+              8'h44: // D
+              dlab_tag_counter <= 1;
+              8'h4C: // L
+              if (dlab_tag_counter == 1) dlab_tag_counter <= 2;
+              else dlab_tag_counter <= 0; 
+              8'h41: // A
+              if (dlab_tag_counter == 2) dlab_tag_counter <= 3;
+              else if (dlab_tag_counter == 6) dlab_tag_counter <= 7;
+              else dlab_tag_counter <= 0;
+              8'h42: // B
+              if (dlab_tag_counter == 3) dlab_tag_counter <= 4;
+              else dlab_tag_counter <= 0;
+              8'h5F: // _
+              if (dlab_tag_counter == 4) dlab_tag_counter <= 5;
+              else dlab_tag_counter <= 0;
+              8'h54: // T
+              if (dlab_tag_counter == 5) dlab_tag_counter <= 6;
+              else dlab_tag_counter <= 0;
+              8'h47: // G
+              if (dlab_tag_counter == 7) dlab_tag_counter <= 8;
+              else dlab_tag_counter <= 0;
+              default:
+              dlab_tag_counter <= 0;
+            endcase
+        end
+      end
+      if (P == S_MAIN_READ && dlab_tag && !result_ready&& sd_valid) begin
+        if ((sd_dout>8'h40 && sd_dout<8'h5B) || (sd_dout>8'h60 && sd_dout<8'h7B)) begin
+          tl_counter <= tl_counter+1;
+        end else begin
+          if (tl_counter == 3) tot_count <= tot_count+1;
+          tl_counter <= 0;
+        end
+      end
+      if (P == S_MAIN_READ && dlab_tag && !dlab_end&& sd_valid) begin
+        if (dlab_end_counter == 8) begin
+          dlab_end <= 1;
+          tot_count <= tot_count-1;
+          result_ready <= 1;
+        end
+        else begin
+            case (sd_dout)
+              8'h44: // D
+              if (dlab_end_counter==0) dlab_end_counter <= 1;
+              else if (dlab_end_counter==7) dlab_end_counter <= 8;
+              else dlab_end_counter <= 0;
+              8'h4C: // L
+              if (dlab_end_counter == 1) dlab_end_counter <= 2;
+              else dlab_end_counter <= 0; 
+              8'h41: // A
+              if (dlab_end_counter == 2) dlab_end_counter <= 3;
+              else dlab_end_counter <= 0;
+              8'h42: // B
+              if (dlab_end_counter == 3) dlab_end_counter <= 4;
+              else dlab_end_counter <= 0;
+              8'h5F: // _
+              if (dlab_end_counter == 4) dlab_end_counter <= 5;
+              else dlab_end_counter <= 0;
+              8'h45: // E
+              if (dlab_end_counter == 5) dlab_end_counter <= 6;
+              else dlab_end_counter <= 0;
+              8'h4E: // N
+              if (dlab_end_counter == 6) dlab_end_counter <= 7;
+              else dlab_end_counter <= 0;
+              default:
+              dlab_end_counter <= 0;
+            endcase
+        end
+      end
+      if (P == S_MAIN_READ && result_ready) tot_count <= tot_count+1;
   end
 end
 
@@ -346,6 +359,14 @@ always @(posedge clk) begin
   //              ((data_byte[7:4] > 9)? "7" : "0") + data_byte[7:4],
   //              ((data_byte[3:0] > 9)? "7" : "0") + data_byte[3:0], "h." };
   // end
+ else if (P == S_MAIN_READ) begin
+    row_A <= "   S_MAIN_READ  ";
+    row_B <= "       STATE    ";
+  end
+  else if (P == S_MAIN_SEARCH) begin
+    row_A <= " S_MAIN_SEARCH  ";
+    row_B <= "       STATE    ";
+  end
   else if (P == S_MAIN_SHOW) begin
     row_A <= {"Found ",
               ((tot_count[15:12] > 9) ? "7" : "0") + tot_count[15:12],
