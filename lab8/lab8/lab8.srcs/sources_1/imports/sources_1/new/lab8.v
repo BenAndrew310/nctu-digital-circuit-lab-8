@@ -52,8 +52,7 @@ module lab8(
 
 localparam [2:0] S_MAIN_INIT = 3'b000, S_MAIN_IDLE = 3'b001,
                  S_MAIN_WAIT = 3'b010, S_MAIN_READ = 3'b011,
-                 S_MAIN_SEARCH = 3'b100, S_MAIN_DONE = 3'b101,  
-                 S_MAIN_SHOW = 3'b110;
+                 S_MAIN_DONE = 3'b100, S_MAIN_SHOW = 3'b101;
 
 // Declare system variables
 wire btn_level, btn_pressed;
@@ -91,8 +90,7 @@ wire [8:0] sram_addr;
 wire       sram_we, sram_en;
 
 assign clk_sel = (init_finished)? clk : clk_500k; // clock for the SD controller
-//assign usr_led[2:0] = P;//4'h00;
-assign usr_led =dlab_tag; 
+assign usr_led =dlab_tag;
 
 clk_divider#(200) clk_divider0(
   .clk(clk),
@@ -173,15 +171,8 @@ always @(posedge clk) begin
     P <= S_MAIN_INIT;
     done_flag <= 0;
   end
-  else// begin
+  else
     P <= P_next;
-//    if (P == S_MAIN_SHOW)
-//      done_flag <= 1;
-//    else if (P == S_MAIN_SHOW && P_next == S_MAIN_IDLE)
-//      done_flag <= 0;
-//    else
-//      done_flag <= 0;
-//  end
 end
 
 always @(*) begin // FSM next-state logic
@@ -196,19 +187,11 @@ always @(*) begin // FSM next-state logic
       P_next = S_MAIN_READ;
     S_MAIN_READ: // wait for the input data to enter the SRAM buffer
       if (result_ready) P_next = S_MAIN_SHOW;
-      else if (sd_counter == 512) P_next = S_MAIN_DONE;//S_MAIN_SEARCH;
+      else if (sd_counter == 512) P_next = S_MAIN_DONE;
       else P_next = S_MAIN_READ;
-//    S_MAIN_SEARCH:
-//      if (result_ready) P_next = S_MAIN_SHOW;
-//      else if (sd_counter == 512) P_next = S_MAIN_DONE;
-//      else P_next = S_MAIN_SEARCH;
     S_MAIN_DONE: // read byte 0 of the superblock from sram[]
-      // if (btn_pressed == 1) P_next = S_MAIN_SHOW;
-      // else P_next = S_MAIN_DONE;
       P_next = S_MAIN_WAIT;
     S_MAIN_SHOW:
-      // if (sd_counter < 512) P_next = S_MAIN_DONE;
-      // else P_next = S_MAIN_IDLE;
       P_next = P;
     default:
       P_next = S_MAIN_IDLE;
@@ -231,12 +214,9 @@ end
 // SD card read address incrementer
 always @(posedge clk) begin
   if (~reset_n || 
-//    (P == S_MAIN_READ && P_next == S_MAIN_SEARCH) || 
     (P == S_MAIN_DONE && P_next == S_MAIN_WAIT) )
     sd_counter <= 0;
-  else if (P == S_MAIN_READ && sd_valid) //||
-           // P == S_MAIN_SEARCH)
-           // (P == S_MAIN_DONE && P_next == S_MAIN_SHOW))
+  else if (P == S_MAIN_READ && sd_valid)
     sd_counter <= sd_counter + 1;
   else sd_counter <= sd_counter;
 end
@@ -349,22 +329,8 @@ always @(posedge clk) begin
     row_A = "SD card cannot  ";
     row_B = "be initialized! ";
   end 
-  // else if (done_flag) begin
-  //   row_A <= "SD block 8192:  ";
-  //   row_B <= { "Byte ",
-  //              sd_counter[9:8] + "0",
-  //              ((sd_counter[7:4] > 9)? "7" : "0") + sd_counter[7:4],
-  //              ((sd_counter[3:0] > 9)? "7" : "0") + sd_counter[3:0],
-  //              "h = ",
-  //              ((data_byte[7:4] > 9)? "7" : "0") + data_byte[7:4],
-  //              ((data_byte[3:0] > 9)? "7" : "0") + data_byte[3:0], "h." };
-  // end
  else if (P == S_MAIN_READ) begin
     row_A <= "   S_MAIN_READ  ";
-    row_B <= "       STATE    ";
-  end
-  else if (P == S_MAIN_SEARCH) begin
-    row_A <= " S_MAIN_SEARCH  ";
     row_B <= "       STATE    ";
   end
   else if (P == S_MAIN_SHOW) begin
